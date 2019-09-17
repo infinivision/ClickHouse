@@ -33,6 +33,9 @@ namespace ErrorCodes
   * Return subset in specified range (not include the range_end):
   * bitmapSubsetInRange:    bitmap,integer,integer -> bitmap
   *
+  * Return subset of the smallest `limit` values in set which is no smaller than `range_start`.
+  * bitmapSubsetInRange:    bitmap,integer,integer -> bitmap
+  *
   * Two bitmap and calculation:
   * bitmapAnd:	bitmap,bitmap -> bitmap
   *
@@ -243,12 +246,13 @@ private:
     }
 };
 
-class FunctionBitmapSubsetInRange : public IFunction
+template <typename Impl>
+class FunctionBitmapSubset : public IFunction
 {
 public:
-    static constexpr auto name = "bitmapSubsetInRange";
+    static constexpr auto name = Impl::name;
 
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionBitmapSubsetInRange>(); }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionBitmapSubset<Impl>>(); }
 
     String getName() const override { return name; }
 
@@ -347,14 +351,39 @@ private:
             const UInt32 range_start = is_column_const[1] ? (*container1)[0] : (*container1)[i];
             const UInt32 range_end = is_column_const[2] ? (*container2)[0] : (*container2)[i];
 
-            auto bd2 = new AggregateFunctionGroupBitmapData<T>();
-            bd0.rbs.rb_range(range_start, range_end, bd2->rbs);
-
-            col_to->insertFrom(reinterpret_cast<ConstAggregateDataPtr>(bd2));
+            col_to->insertDefault();
+            AggregateFunctionGroupBitmapData<T> & bd2
+                = *reinterpret_cast<AggregateFunctionGroupBitmapData<T> *>(col_to->getData()[i]);
+            Impl::apply(bd0, range_start, range_end, bd2);
         }
         block.getByPosition(result).column = std::move(col_to);
     }
 };
+
+struct BitmapSubsetInRangeImpl
+{
+public:
+    static constexpr auto name = "bitmapSubsetInRange";
+    template <typename T>
+    static void apply(const AggregateFunctionGroupBitmapData<T> & bd0, UInt32 range_start, UInt32 range_end, AggregateFunctionGroupBitmapData<T> & bd2)
+    {
+        bd0.rbs.rb_range(range_start, range_end, bd2.rbs);
+    }
+};
+
+struct BitmapSubsetLimitImpl
+{
+public:
+    static constexpr auto name = "bitmapSubsetLimit";
+    template <typename T>
+    static void apply(const AggregateFunctionGroupBitmapData<T> & bd0, UInt32 range_start, UInt32 range_end, AggregateFunctionGroupBitmapData<T> & bd2)
+    {
+        bd0.rbs.rb_limit(range_start, range_end, bd2.rbs);
+    }
+};
+
+using FunctionBitmapSubsetInRange = FunctionBitmapSubset<BitmapSubsetInRangeImpl>;
+using FunctionBitmapSubsetLimit = FunctionBitmapSubset<BitmapSubsetLimitImpl>;
 
 template <typename Name>
 class FunctionBitmapSelfCardinalityImpl : public IFunction

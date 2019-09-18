@@ -493,7 +493,7 @@ public:
     }
 
     /**
-     * Return new set of the smallest `limit` values in set which is no smaller than `range_start`.
+     * Return new set of the smallest `limit` values in set which is no less than `range_start`.
      */
     UInt64 rb_limit(UInt32 range_start, UInt32 limit, RoaringBitmapWithSmallSet& r1) const
     {

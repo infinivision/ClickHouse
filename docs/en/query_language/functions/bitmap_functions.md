@@ -84,7 +84,7 @@ SELECT bitmapToArray(bitmapSubsetInRange(bitmapBuild([0,1,2,3,4,5,6,7,8,9,10,11,
 
 ## bitmapSubsetLimit {#bitmap_functions-bitmapsubsetlimit}
 
-Return subset of the smallest `limit` values in set which is no smaller than `range_start`.
+Return subset of the smallest `limit` values in set which is no less than `range_start`.
 
 ```
 bitmapSubsetLimit(bitmap, range_start, limit)

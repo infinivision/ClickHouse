@@ -700,6 +700,7 @@ private:
 template <typename T>
 struct AggregateFunctionGroupBitmapData
 {
+    bool doneFirst = false;
     RoaringBitmapWithSmallSet<T, 32> rbs;
     static const char * name() { return "groupBitmap"; }
 };

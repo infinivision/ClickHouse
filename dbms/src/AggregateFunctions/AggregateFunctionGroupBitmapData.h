@@ -470,7 +470,7 @@ public:
             for (const auto & x : small)
             {
                 T val = x.getValue();
-                if ((UInt32)val >= range_start && (UInt32)val < range_end)
+                if (UInt32(val) >= range_start && UInt32(val) < range_end)
                 {
                     r1.add(val);
                     count++;
@@ -482,7 +482,7 @@ public:
             roaring_uint32_iterator_t iterator;
             roaring_init_iterator(rb, &iterator);
             roaring_move_uint32_iterator_equalorlarger(&iterator, range_start);
-            while (iterator.has_value && (UInt32)iterator.current_value < range_end)
+            while (iterator.has_value && UInt32(iterator.current_value) < range_end)
             {
                 r1.add(iterator.current_value);
                 roaring_advance_uint32_iterator(&iterator);
@@ -504,7 +504,7 @@ public:
             for (const auto & x : small)
             {
                 T val = x.getValue();
-                if ((UInt32)val >= range_start)
+                if (UInt32(val) >= range_start)
                 {
                     ans.push_back(val);
                 }
@@ -514,14 +514,14 @@ public:
                 limit = ans.size();
             for (size_t i=0; i<limit; i++)
                 r1.add(ans[i]);
-            count = (UInt64)limit;
+            count = UInt64(limit);
         }
         else
         {
             roaring_uint32_iterator_t iterator;
             roaring_init_iterator(rb, &iterator);
             roaring_move_uint32_iterator_equalorlarger(&iterator, range_start);
-            while ((UInt32)count < limit && iterator.has_value)
+            while (UInt32(count) < limit && iterator.has_value)
             {
                 r1.add(iterator.current_value);
                 roaring_advance_uint32_iterator(&iterator);

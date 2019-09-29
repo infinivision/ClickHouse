@@ -267,7 +267,7 @@ void writeAnyEscapedString(const char * begin, const char * end, WriteBuffer & b
     while (true)
     {
         /// On purpose we will escape more characters than minimally necessary.
-        const char * next_pos = find_first_symbols<'\b', '\f', '\n', '\r', '\t', '\0', '\\', quote_character>(pos, end);
+        const char * next_pos = find_first_symbols<'\\', quote_character>(pos, end);
 
         if (next_pos == end)
         {

@@ -325,9 +325,9 @@ BlockInputStreams StorageDistributed::read(
 
     ClusterProxy::SelectStreamFactory select_stream_factory = remote_table_function_ptr
         ? ClusterProxy::SelectStreamFactory(
-            header, processed_stage, remote_table_function_ptr, context.getExternalTables())
+            header, processed_stage, remote_table_function_ptr, context.getQueryContext().getScalars(), context.getExternalTables())
         : ClusterProxy::SelectStreamFactory(
-            header, processed_stage, QualifiedTableName{remote_database, remote_table}, context.getExternalTables());
+            header, processed_stage, QualifiedTableName{remote_database, remote_table}, context.getQueryContext().getScalars(), context.getExternalTables());
 
     if (settings.optimize_skip_unused_shards)
     {

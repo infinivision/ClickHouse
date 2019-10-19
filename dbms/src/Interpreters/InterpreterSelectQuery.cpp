@@ -305,6 +305,11 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
     syntax_analyzer_result = SyntaxAnalyzer(context, options).analyze(
         query_ptr, source_header.getNamesAndTypesList(), required_result_column_names, storage, NamesAndTypesList());
+
+    /// Save scalar sub queries's results in the query context
+    for (const auto & it : syntax_analyzer_result->getScalars())
+        context.getQueryContext().addScalar(it.first, it.second);
+
     query_analyzer = std::make_unique<SelectQueryExpressionAnalyzer>(
         query_ptr, syntax_analyzer_result, context,
         NameSet(required_result_column_names.begin(), required_result_column_names.end()),

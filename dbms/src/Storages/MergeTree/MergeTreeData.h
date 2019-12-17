@@ -465,7 +465,8 @@ public:
     /// If out_transaction != nullptr, adds the part in the PreCommitted state (the part will be added to the
     /// active set later with out_transaction->commit()).
     /// Else, commits the part immediately.
-    void renameTempPartAndAdd(MutableDataPartPtr & part, SimpleIncrement * increment = nullptr, Transaction * out_transaction = nullptr);
+    /// Returns false if part was deduplicated (not inserted because it's a duplicate of previously inserted part).
+    bool renameTempPartAndAdd(MutableDataPartPtr & part, SimpleIncrement * increment = nullptr, Transaction * out_transaction = nullptr);
 
     /// The same as renameTempPartAndAdd but the block range of the part can contain existing parts.
     /// Returns all parts covered by the added part (in ascending order).
@@ -968,6 +969,16 @@ protected:
 
     bool areBackgroundMovesNeeded() const;
 
+    /// Load insertion history
+    void histLoad();
+
+    /// Find and set in history
+    /// Return true if block_id in history 
+    bool histFindAndAdd(const String & block_id);
+
+    /// Drop a partition related records in history
+    void histDropPartition(const String & partition_id);
+
 private:
     /// RAII Wrapper for atomic work with currently moving parts
     /// Acuire them in constructor and remove them in destructor
@@ -990,6 +1001,16 @@ private:
 
     /// Check selected parts for movements. Used by ALTER ... MOVE queries.
     CurrentlyMovingPartsTagger checkPartsForMove(const DataPartsVector & parts, SpacePtr space);
+
+    /// Insertion history
+    mutable std::mutex hist_mutex;
+    std::list<String> hist_id_list;
+    std::unordered_set<String> hist_id_set;
+    std::unique_ptr<WriteBufferFromFile> hist_writer;
+    UInt64 hist_cnt;
+
+    /// dump history to file
+    void histDump();
 };
 
 }

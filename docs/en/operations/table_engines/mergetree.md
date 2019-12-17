@@ -89,6 +89,8 @@ For a description of parameters, see the [CREATE query description](../../query_
     - `merge_with_ttl_timeout` — Minimum delay in seconds before repeating a merge with TTL. Default value: 86400 (1 day).
     - `write_final_mark` — Enables or disables writing the final index mark at the end of data part. Default value: 1. Don't turn it off.
     - `storage_policy` — Storage policy. See [Using Multiple Block Devices for Data Storage](#table_engine-mergetree-multiple-volumes).
+    - `enable_insertion_deduplication` - Enable block insertion deduplication. Default value: 0.
+    - `insertion_deduplication_window` - How many last blocks of hashes should be kept in file (old blocks will be deleted). Default value: 100.
 
 
 **Example of Sections Setting**

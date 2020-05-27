@@ -34,6 +34,7 @@ void registerFunctionArrayWithConstant(FunctionFactory &);
 void registerFunctionArrayZip(FunctionFactory &);
 void registerFunctionArrayAUC(FunctionFactory &);
 void registerFunctionArrayReduceInRanges(FunctionFactory &);
+void registerFunctionArrayIP(FunctionFactory &);
 
 void registerFunctionsArray(FunctionFactory & factory)
 {
@@ -69,6 +70,7 @@ void registerFunctionsArray(FunctionFactory & factory)
     registerFunctionArrayWithConstant(factory);
     registerFunctionArrayZip(factory);
     registerFunctionArrayAUC(factory);
+    registerFunctionArrayIP(factory);
 }
 
 }

@@ -67,6 +67,7 @@ SRCS(
     array/arrayFirstIndex.cpp
     array/arrayFlatten.cpp
     array/arrayIntersect.cpp
+    array/arrayIP.cpp
     array/arrayJoin.cpp
     array/arrayMap.cpp
     array/arrayPopBack.cpp

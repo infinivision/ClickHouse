@@ -48,15 +48,15 @@ SELECT 'Tuple nested in Map';
 SET allow_experimental_map_type = 1;
 
 DROP TABLE IF EXISTS test_tuple_nested_in_map;
-CREATE TABLE test_tuple_nested_in_map (value Map(String, Tuple(UInt8, UInt8))) ENGINE=TinyLog;
+CREATE TABLE test_tuple_nested_in_map (value Map(Tuple(UInt8, UInt8))) ENGINE=TinyLog;
 
 SET input_format_null_as_default = 1;
-INSERT INTO test_tuple_nested_in_map VALUES (map('test', (NULL, 1)));
+INSERT INTO test_tuple_nested_in_map VALUES (mapBuild('test', (NULL, 1)));
 
 SELECT * FROM test_tuple_nested_in_map;
 
 SET input_format_null_as_default = 0;
-INSERT INTO test_tuple_nested_in_map VALUES (map('test', (NULL, 1))); -- { clientError 53 }
+INSERT INTO test_tuple_nested_in_map VALUES (mapBuild('test', (NULL, 1))); -- { clientError 53 }
 SELECT * FROM test_tuple_nested_in_map;
 
 DROP TABLE test_tuple_nested_in_map;
@@ -64,14 +64,16 @@ DROP TABLE test_tuple_nested_in_map;
 SELECT 'Tuple nested in Map nested in Tuple';
 
 DROP TABLE IF EXISTS test_tuple_nested_in_map_nested_in_tuple;
-CREATE TABLE test_tuple_nested_in_map_nested_in_tuple (value Tuple(UInt8, Map(String, Tuple(UInt8, UInt8)))) ENGINE=TinyLog;
+-- FIXME(map): Map doesn't work with TinyLog
+-- CREATE TABLE test_tuple_nested_in_map_nested_in_tuple (value Tuple(UInt8, Map(Tuple(UInt8, UInt8)))) ENGINE=TinyLog;
+CREATE TABLE test_tuple_nested_in_map_nested_in_tuple (value Tuple(UInt8, Map(Tuple(UInt8, UInt8)))) ENGINE=Memory;
 
 SET input_format_null_as_default = 1;
-INSERT INTO test_tuple_nested_in_map_nested_in_tuple VALUES ( (NULL, map('test', (NULL, 1))) );
+INSERT INTO test_tuple_nested_in_map_nested_in_tuple VALUES ( (NULL, mapBuild('test', (NULL, 1))) );
 SELECT * FROM test_tuple_nested_in_map_nested_in_tuple;
 
 SET input_format_null_as_default = 0;
-INSERT INTO test_tuple_nested_in_map_nested_in_tuple VALUES ( (NULL, map('test', (NULL, 1))) ); -- { clientError 53 }
+INSERT INTO test_tuple_nested_in_map_nested_in_tuple VALUES ( (NULL, mapBuild('test', (NULL, 1))) ); -- { clientError 53 }
 SELECT * FROM test_tuple_nested_in_map_nested_in_tuple;
 
 DROP TABLE test_tuple_nested_in_map_nested_in_tuple;

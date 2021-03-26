@@ -274,12 +274,12 @@ void FieldVisitorWriteBinary::operator() (const Map & x, WriteBuffer & buf) cons
     const size_t size = x.size();
     DB::writeBinary(size, buf);
 
-    for (auto it = x.begin(); it != x.end(); ++it)
+    for (const auto & elem : x)
     {
-        writeBinary(it->first, buf);
-        const UInt8 type = it->second.getType();
+        writeBinary(elem.first, buf);
+        const UInt8 type = elem.second.getType();
         writeBinary(type, buf);
-        Field::dispatch([&buf] (const auto & value) { DB::FieldVisitorWriteBinary()(value, buf); }, it->second);
+        Field::dispatch([&buf] (const auto & value) { DB::FieldVisitorWriteBinary()(value, buf); }, elem.second);
     }
 }
 

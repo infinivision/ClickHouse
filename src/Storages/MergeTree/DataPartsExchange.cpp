@@ -1,6 +1,7 @@
 #include <Storages/MergeTree/DataPartsExchange.h>
 
 #include <DataStreams/NativeBlockOutputStream.h>
+#include <Disks/IDiskRemote.h>
 #include <Disks/SingleDiskVolume.h>
 #include <Disks/createVolume.h>
 #include <IO/HTTPCommon.h>
@@ -40,6 +41,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int S3_ERROR;
     extern const int INCORRECT_PART_TYPE;
+    extern const int ZERO_COPY_REPLICATION_ERROR;
 }
 
 namespace DataPartsExchange
@@ -344,8 +346,8 @@ void Service::sendPartFromDiskRemoteMeta(const MergeTreeData::DataPartPtr & part
         checksums.files[file_name] = {};
 
     auto disk = part->volume->getDisk();
-    if (disk->getType() != DiskType::Type::S3 && disk->getType() != DiskType::Type::HDFS)
-        throw Exception("remote disk is not remote anymore", ErrorCodes::LOGICAL_ERROR);
+    if (nullptr == dynamic_cast<IDiskRemote *>(disk.get()))
+        throw Exception(fmt::format("{} is not remote disk anymore", disk->getName()), ErrorCodes::LOGICAL_ERROR);
 
     part->storage.lockSharedData(*part);
 
@@ -362,9 +364,9 @@ void Service::sendPartFromDiskRemoteMeta(const MergeTreeData::DataPartPtr & part
         fs::path metadata(metadata_file);
 
         if (!fs::exists(metadata))
-            throw Exception("remote metadata '" + file_name + "' is not exists", ErrorCodes::CORRUPTED_DATA);
+            throw Exception("Remote metadata '" + file_name + "' is not exists", ErrorCodes::CORRUPTED_DATA);
         if (!fs::is_regular_file(metadata))
-            throw Exception("remote metadata '" + file_name + "' is not a file", ErrorCodes::CORRUPTED_DATA);
+            throw Exception("Remote metadata '" + file_name + "' is not a file", ErrorCodes::CORRUPTED_DATA);
         UInt64 file_size = fs::file_size(metadata);
 
         writeStringBinary(it.first, out);
@@ -434,7 +436,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
 
     bool try_use_s3_copy = false;
     bool try_use_hdfs_copy = false;
-    if (try_zero_copy && disk_remote && disk_remote->getType() != DiskType::Type::S3 && disk_remote->getType() != DiskType::Type::HDFS)
+    if (try_zero_copy && disk_remote && (nullptr == dynamic_cast<IDiskRemote *>(disk_remote.get())))
         throw Exception("Try to fetch shared part on non-shared disk", ErrorCodes::LOGICAL_ERROR);
 
     Disks disks_s3;
@@ -507,7 +509,12 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     int send_s3 = parse<int>(in.getResponseCookie("send_s3_metadata", "0"));
     int send_hdfs = parse<int>(in.getResponseCookie("send_hdfs_metadata", "0"));
 
-    if (send_s3 == 1 || send_hdfs == 1)
+    if (send_s3 + send_hdfs > 1)
+    {
+        throw Exception("Got more than one metadata cookie", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    if (send_s3 + send_hdfs == 1)
     {
         if (send_s3 == 1)
         {
@@ -572,7 +579,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
         String part_type = "Wide";
         readStringBinary(part_type, in);
         if (part_type == "InMemory")
-            throw Exception("Got 'send_s3_metadata' or 'send_hdfs_metadata' cookie for in-memory part", ErrorCodes::INCORRECT_PART_TYPE);
+            throw Exception(fmt::format("Got '{}' cookie for in-memory part", send_s3?"send_s3_metadata":"send_hdfs_metadata"), ErrorCodes::INCORRECT_PART_TYPE);
 
         UUID part_uuid = UUIDHelpers::Nil;
 
@@ -584,14 +591,15 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
         {
             if (send_s3)
                 return downloadPartToDiskRemoteMeta(part_name, replica_path, to_detached, tmp_prefix_, std::move(disks_s3), in, throttler);
-            else
+            if (send_hdfs)
                 return downloadPartToDiskRemoteMeta(part_name, replica_path, to_detached, tmp_prefix_, std::move(disks_hdfs), in, throttler);
         }
         catch (const Exception & e)
         {
-            if (e.code() != ErrorCodes::S3_ERROR)
+            if (e.code() != ErrorCodes::S3_ERROR && e.code() != ErrorCodes::ZERO_COPY_REPLICATION_ERROR)
                 throw;
-            /// Try again but without S3/HDFS copy
+            LOG_WARNING(log, e.message() + " Will retry fetching part without zero-copy.");
+            /// Try again but without zero-copy
             return fetchPart(metadata_snapshot, context, part_name, replica_path, host, port, timeouts,
                 user, password, interserver_scheme, throttler, to_detached, tmp_prefix_, nullptr, false);
         }
@@ -883,9 +891,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToDiskRemoteMeta(
     }
     if (disk == nullptr)
     {
-        LOG_WARNING(log, "Part {} unique id {} doesn't exist on this replica's remote disks. Will retry fetching part disabling zero-copy.",
-            part_name, part_id);
-        throw Exception("Part " + part_name + " unique id " + part_id + " doesn't exist on this replica's remote disks.", ErrorCodes::S3_ERROR);
+        throw Exception(fmt::format("Part {} unique id {} doesn't exist on this replica's remote disks.", part_name, part_id), ErrorCodes::ZERO_COPY_REPLICATION_ERROR);
     }
 
     static const String TMP_PREFIX = "tmp_fetch_";

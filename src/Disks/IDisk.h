@@ -217,12 +217,12 @@ public:
     /// Performs action on disk startup.
     virtual void startup() {}
 
-    /// Return some uniq string for file, overrode for remote disk
+    /// Return some uniq string for file, overrode for IDiskRemote
     /// Required for distinguish different copies of the same part on remote disk
     virtual String getUniqueId(const String & path) const { return path; }
 
     /// Check file exists and ClickHouse has an access to it
-    /// Overrode in remote disk
+    /// Overrode in remote FS disks (s3/hdfs)
     /// Required for remote disk to ensure that replica has access to data written by other node
     virtual bool checkUniqueId(const String & id) const { return exists(id); }
 

@@ -7272,7 +7272,7 @@ bool StorageReplicatedMergeTree::tryToFetchIfShared(
 {
     const auto settings = getSettings();
     auto disk_type = disk->getType();
-    if (!(disk_type==DiskType::Type::S3 && settings->allow_s3_zero_copy_replication) && !(disk_type==DiskType::Type::HDFS && settings->allow_hdfs_zero_copy_replication))
+    if (!(disk_type == DiskType::Type::S3 && settings->allow_s3_zero_copy_replication) && !(disk_type == DiskType::Type::HDFS && settings->allow_hdfs_zero_copy_replication))
         return false;
 
     String replica = getSharedDataReplica(part, disk_type);

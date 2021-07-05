@@ -2708,10 +2708,10 @@ void MergeTreeData::swapActivePart(MergeTreeData::DataPartPtr part_copy)
 
             original_active_part->force_keep_shared_data = false;
 
-            auto orig_disk_type = original_active_part->volume->getDisk()->getType();
-            if (orig_disk_type == DiskType::Type::S3 || orig_disk_type == DiskType::Type::HDFS)
+            auto original_disk_type = original_active_part->volume->getDisk()->getType();
+            if (original_disk_type == DiskType::Type::S3 || original_disk_type == DiskType::Type::HDFS)
             {
-                if (part_copy->volume->getDisk()->getType() == orig_disk_type
+                if (part_copy->volume->getDisk()->getType() == original_disk_type
                         && original_active_part->getUniqueId() == part_copy->getUniqueId())
                 {
                     /// May be when several volumes use the same S3 storage

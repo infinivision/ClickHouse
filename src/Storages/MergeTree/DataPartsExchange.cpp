@@ -413,7 +413,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     const String & tmp_prefix_,
     std::optional<CurrentlySubmergingEmergingTagger> * tagger_ptr,
     bool try_zero_copy,
-    const DiskPtr disk_remote)
+    const DiskPtr dest_disk)
 {
     if (blocker.isCancelled())
         throw Exception("Fetching of part was cancelled", ErrorCodes::ABORTED);
@@ -436,7 +436,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
 
     bool try_use_s3_copy = false;
     bool try_use_hdfs_copy = false;
-    if (try_zero_copy && disk_remote && (nullptr == dynamic_cast<IDiskRemote *>(disk_remote.get())))
+    if (try_zero_copy && dest_disk && (nullptr == dynamic_cast<IDiskRemote *>(dest_disk.get())))
         throw Exception("Try to fetch shared part on non-shared disk", ErrorCodes::LOGICAL_ERROR);
 
     Disks disks_s3;
@@ -451,8 +451,8 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
         }
         else
         {
-            if (disk_remote && disk_remote->getType() == DiskType::Type::S3)
-                disks_s3.push_back(disk_remote);
+            if (dest_disk && dest_disk->getType() == DiskType::Type::S3)
+                disks_s3.push_back(dest_disk);
             else
             {
                 disks_s3 = data.getDisksByType(DiskType::Type::S3);
@@ -466,8 +466,8 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
         }
         else
         {
-            if (disk_remote && disk_remote->getType() == DiskType::Type::HDFS)
-                disks_hdfs.push_back(disk_remote);
+            if (dest_disk && dest_disk->getType() == DiskType::Type::HDFS)
+                disks_hdfs.push_back(dest_disk);
             else
             {
                 disks_hdfs = data.getDisksByType(DiskType::Type::HDFS);

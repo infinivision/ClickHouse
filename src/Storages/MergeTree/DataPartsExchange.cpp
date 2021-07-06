@@ -893,6 +893,8 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToDiskRemoteMeta(
     {
         throw Exception(fmt::format("Part {} unique id {} doesn't exist on this replica's remote disks.", part_name, part_id), ErrorCodes::ZERO_COPY_REPLICATION_ERROR);
     }
+    LOG_DEBUG(log, "Downloading Part {} unique id {} metadata onto disk {}.",
+        part_name, part_id, disk->getName());
 
     static const String TMP_PREFIX = "tmp_fetch_";
     String tmp_prefix = tmp_prefix_.empty() ? TMP_PREFIX : tmp_prefix_;

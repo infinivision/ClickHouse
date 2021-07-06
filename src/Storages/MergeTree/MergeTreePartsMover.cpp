@@ -195,11 +195,10 @@ MergeTreeData::DataPartPtr MergeTreePartsMover::clonePart(const MergeTreeMoveEnt
         throw Exception("Cancelled moving parts.", ErrorCodes::ABORTED);
 
     auto settings = data->getSettings();
-
     auto part = moving_part.part;
-    LOG_TRACE(log, "Cloning part {}", part->name);
-
     auto disk = moving_part.reserved_space->getDisk();
+    LOG_DEBUG(log, "Cloning part {} from {} to {}", part->name, part->volume->getDisk()->getName(), disk->getName());
+
     auto disk_type = disk->getType();
     const String directory_to_move = "moving";
     if ((disk_type == DiskType::Type::S3 && settings->allow_s3_zero_copy_replication) || (disk_type == DiskType::Type::HDFS && settings->allow_hdfs_zero_copy_replication))

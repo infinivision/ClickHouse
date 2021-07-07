@@ -156,8 +156,9 @@ void DiskHDFS::removeFromRemoteFS(RemoteFSPathKeeperPtr fs_paths_keeper)
 bool DiskHDFS::checkUniqueId(const String & hdfs_uri) const
 {
     const size_t begin_of_path = hdfs_uri.find('/', hdfs_uri.find("//") + 2);
-    const String path = hdfs_uri.substr(begin_of_path);
-    return (0 == hdfsExists(hdfs_fs.get(), path.c_str()));
+    const String remote_fs_object_path = hdfs_uri.substr(begin_of_path);
+    return (boost::algorithm::starts_with(remote_fs_object_path, remote_fs_root_path) &&
+        0 == hdfsExists(hdfs_fs.get(), remote_fs_object_path.c_str()));
 }
 
 namespace

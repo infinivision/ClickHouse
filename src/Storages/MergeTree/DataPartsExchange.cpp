@@ -891,7 +891,12 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToDiskRemoteMeta(
     }
     if (disk == nullptr)
     {
-        throw Exception(fmt::format("Part {} unique id {} doesn't exist on this replica's remote disks.", part_name, part_id), ErrorCodes::ZERO_COPY_REPLICATION_ERROR);
+        Strings disks_name;
+        for (const auto & disk_remote : disks_remote)
+        {
+            disks_name.push_back(disk_remote->getName());
+        }
+        throw Exception(fmt::format("Part {} unique id {} doesn't exist on {}.", part_name, part_id, fmt::join(disks_name, ", ")), ErrorCodes::ZERO_COPY_REPLICATION_ERROR);
     }
     LOG_DEBUG(log, "Downloading Part {} unique id {} metadata onto disk {}.",
         part_name, part_id, disk->getName());

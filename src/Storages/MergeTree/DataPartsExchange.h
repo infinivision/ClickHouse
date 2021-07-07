@@ -82,7 +82,7 @@ public:
         const String & tmp_prefix_ = "",
         std::optional<CurrentlySubmergingEmergingTagger> * tagger_ptr = nullptr,
         bool try_zero_copy = true,
-        const DiskPtr disk_remote = nullptr);
+        const DiskPtr dest_disk = nullptr);
 
     /// You need to stop the data transfer.
     ActionBlocker blocker;

@@ -201,7 +201,7 @@ MergeTreeData::DataPartPtr MergeTreePartsMover::clonePart(const MergeTreeMoveEnt
 
     auto disk_type = disk->getType();
     const String directory_to_move = "moving";
-    if ((disk_type == DiskType::Type::S3 && settings->allow_s3_zero_copy_replication) || (disk_type == DiskType::Type::HDFS && settings->allow_hdfs_zero_copy_replication))
+    if ((disk_type == DiskType::Type::S3 && settings->allow_remote_fs_zero_copy_replication) || (disk_type == DiskType::Type::HDFS && settings->allow_remote_fs_zero_copy_replication))
     {
         /// Try zero-copy replication and fallback to default copy if it's not possible
         moving_part.part->assertOnDisk();

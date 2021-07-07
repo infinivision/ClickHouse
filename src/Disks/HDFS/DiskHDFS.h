@@ -44,6 +44,8 @@ public:
 
     DiskType::Type getType() const override { return DiskType::Type::HDFS; }
 
+    bool supportZeroCopyReplication() const override { return true; }
+
     std::unique_ptr<ReadBufferFromFileBase> readFile(
         const String & path,
         size_t buf_size,

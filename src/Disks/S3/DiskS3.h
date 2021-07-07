@@ -98,6 +98,8 @@ public:
 
     DiskType::Type getType() const override { return DiskType::Type::S3; }
 
+    bool supportZeroCopyReplication() const override { return true; }
+
     void shutdown() override;
 
     void startup() override;

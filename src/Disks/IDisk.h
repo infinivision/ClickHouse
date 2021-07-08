@@ -213,7 +213,7 @@ public:
 
     /// Whether this disk support zero-copy replication.
     /// Overrode in remote fs disks.
-    virtual bool supportZeroCopyReplication() const { return false; }
+    virtual bool supportZeroCopyReplication() const = 0;
 
     /// Invoked when Global Context is shutdown.
     virtual void shutdown() {}

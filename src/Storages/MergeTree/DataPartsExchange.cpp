@@ -184,7 +184,8 @@ void Service::processQuery(const HTMLForm & params, ReadBuffer & /*body*/, Write
             auto disk = part->volume->getDisk();
             auto disk_type = DiskType::toString(disk->getType());
             if (disk->supportZeroCopyReplication() && std::find(capability.begin(), capability.end(), disk_type) != capability.end())
-            { /// if source and destination are in the same S3 storage we try to use S3 CopyObject request first
+            {
+                /// Send metadata if the receiver's capability convers the source disk type.
                 response.addCookie({"remote_fs_metadata", disk_type});
                 sendPartFromDiskRemoteMeta(part, out);
                 return;
@@ -336,8 +337,8 @@ void Service::sendPartFromDiskRemoteMeta(const MergeTreeData::DataPartPtr & part
         checksums.files[file_name] = {};
 
     auto disk = part->volume->getDisk();
-    if (nullptr == dynamic_cast<IDiskRemote *>(disk.get()))
-        throw Exception(fmt::format("{} is not remote disk anymore", disk->getName()), ErrorCodes::LOGICAL_ERROR);
+    if (!disk->supportZeroCopyReplication())
+        throw Exception(fmt::format("disk {} doesn't support zero-copy replication", disk->getName()), ErrorCodes::LOGICAL_ERROR);
 
     part->storage.lockSharedData(*part);
 

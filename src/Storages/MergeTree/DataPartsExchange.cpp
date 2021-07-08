@@ -473,61 +473,6 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     };
 
     int server_protocol_version = parse<int>(in.getResponseCookie("server_protocol_version", "0"));
-    String remote_fs_metadata = parse<String>(in.getResponseCookie("remote_fs_metadata", ""));
-
-    if (!remote_fs_metadata.empty())
-    {
-        if (!try_zero_copy)
-            throw Exception("Got unexpected 'remote_fs_metadata' cookie", ErrorCodes::LOGICAL_ERROR);
-        if (std::find(capability.begin(), capability.end(), remote_fs_metadata) == capability.end())
-            throw Exception(fmt::format("Got 'remote_fs_metadata' cookie {}, expect one from {}", remote_fs_metadata, fmt::join(capability, ", ")), ErrorCodes::LOGICAL_ERROR);
-        if (server_protocol_version < REPLICATION_PROTOCOL_VERSION_WITH_PARTS_ZERO_COPY)
-            throw Exception(fmt::format("Got 'remote_fs_metadata' cookie with old protocol version {}", server_protocol_version), ErrorCodes::LOGICAL_ERROR);
-
-        size_t sum_files_size = 0;
-        readBinary(sum_files_size, in);
-        IMergeTreeDataPart::TTLInfos ttl_infos;
-        String ttl_infos_string;
-        readBinary(ttl_infos_string, in);
-        ReadBufferFromString ttl_infos_buffer(ttl_infos_string);
-        assertString("ttl format version: 1\n", ttl_infos_buffer);
-        ttl_infos.read(ttl_infos_buffer);
-
-        String part_type = "Wide";
-        readStringBinary(part_type, in);
-        if (part_type == "InMemory")
-            throw Exception("Got 'remote_fs_metadata' cookie for in-memory part", ErrorCodes::INCORRECT_PART_TYPE);
-
-        UUID part_uuid = UUIDHelpers::Nil;
-
-        /// Always true due to values of constants. But we keep this condition just in case.
-        if (server_protocol_version >= REPLICATION_PROTOCOL_VERSION_WITH_PARTS_UUID) //-V547
-            readUUIDText(part_uuid, in);
-
-        ReservationPtr reservation;
-        if (!dest_disk)
-        {
-            reservation
-                = data.balancedReservation(metadata_snapshot, sum_files_size, 0, part_name, part_info, {}, tagger_ptr, &ttl_infos, true);
-            if (!reservation)
-                reservation
-                    = data.reserveSpacePreferringTTLRules(metadata_snapshot, sum_files_size, ttl_infos, std::time(nullptr), 0, true);
-            dest_disk = reservation->getDisk();
-        }
-        try
-        {
-            return downloadPartToDiskRemoteMeta(part_name, replica_path, to_detached, tmp_prefix_, dest_disk, in, throttler);
-        }
-        catch (const Exception & e)
-        {
-            if (e.code() != ErrorCodes::S3_ERROR && e.code() != ErrorCodes::ZERO_COPY_REPLICATION_ERROR)
-                throw;
-            LOG_WARNING(log, e.message() + " Will retry fetching part without zero-copy.");
-            /// Try again but without zero-copy
-            return fetchPart(metadata_snapshot, context, part_name, replica_path, host, port, timeouts,
-                user, password, interserver_scheme, throttler, to_detached, tmp_prefix_, nullptr, false);
-        }
-    }
 
     ReservationPtr reservation;
     size_t sum_files_size = 0;
@@ -542,24 +487,29 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
             ReadBufferFromString ttl_infos_buffer(ttl_infos_string);
             assertString("ttl format version: 1\n", ttl_infos_buffer);
             ttl_infos.read(ttl_infos_buffer);
-            reservation
-                = data.balancedReservation(metadata_snapshot, sum_files_size, 0, part_name, part_info, {}, tagger_ptr, &ttl_infos, true);
-            if (!reservation)
+            if (!dest_disk)
+            {
                 reservation
-                    = data.reserveSpacePreferringTTLRules(metadata_snapshot, sum_files_size, ttl_infos, std::time(nullptr), 0, true);
+                    = data.balancedReservation(metadata_snapshot, sum_files_size, 0, part_name, part_info, {}, tagger_ptr, &ttl_infos, true);
+                if (!reservation)
+                    reservation
+                        = data.reserveSpacePreferringTTLRules(metadata_snapshot, sum_files_size, ttl_infos, std::time(nullptr), 0, true);
+            }
         }
-        else
+        else if (!dest_disk)
         {
             reservation = data.balancedReservation(metadata_snapshot, sum_files_size, 0, part_name, part_info, {}, tagger_ptr, nullptr);
             if (!reservation)
                 reservation = data.reserveSpace(sum_files_size);
         }
     }
-    else
+    else if (!dest_disk)
     {
         /// We don't know real size of part because sender server version is too old
         reservation = data.makeEmptyReservationOnLargestDisk();
     }
+    if (!dest_disk)
+        dest_disk = reservation->getDisk();
 
     bool sync = (data_settings->min_compressed_bytes_to_fsync_after_fetch
                     && sum_files_size >= data_settings->min_compressed_bytes_to_fsync_after_fetch);
@@ -572,6 +522,33 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     if (server_protocol_version >= REPLICATION_PROTOCOL_VERSION_WITH_PARTS_UUID)
         readUUIDText(part_uuid, in);
 
+    String remote_fs_metadata = parse<String>(in.getResponseCookie("remote_fs_metadata", ""));
+    if (!remote_fs_metadata.empty())
+    {
+        if (!try_zero_copy)
+            throw Exception("Got unexpected 'remote_fs_metadata' cookie", ErrorCodes::LOGICAL_ERROR);
+        if (std::find(capability.begin(), capability.end(), remote_fs_metadata) == capability.end())
+            throw Exception(fmt::format("Got 'remote_fs_metadata' cookie {}, expect one from {}", remote_fs_metadata, fmt::join(capability, ", ")), ErrorCodes::LOGICAL_ERROR);
+        if (server_protocol_version < REPLICATION_PROTOCOL_VERSION_WITH_PARTS_ZERO_COPY)
+            throw Exception(fmt::format("Got 'remote_fs_metadata' cookie with old protocol version {}", server_protocol_version), ErrorCodes::LOGICAL_ERROR);
+        if (part_type == "InMemory")
+            throw Exception("Got 'remote_fs_metadata' cookie for in-memory part", ErrorCodes::INCORRECT_PART_TYPE);
+
+        try
+        {
+            return downloadPartToDiskRemoteMeta(part_name, replica_path, to_detached, tmp_prefix_, dest_disk, in, throttler);
+        }
+        catch (const Exception & e)
+        {
+            if (e.code() != ErrorCodes::S3_ERROR && e.code() != ErrorCodes::ZERO_COPY_REPLICATION_ERROR)
+                throw;
+            LOG_WARNING(log, e.message() + " Will retry fetching part without zero-copy.");
+            /// Try again but without zero-copy
+            return fetchPart(metadata_snapshot, context, part_name, replica_path, host, port, timeouts,
+                user, password, interserver_scheme, throttler, to_detached, tmp_prefix_, nullptr, false, dest_disk);
+        }
+    }
+
     auto storage_id = data.getStorageID();
     String new_part_path = part_type == "InMemory" ? "memory" : fs::path(data.getFullPathOnDisk(reservation->getDisk())) / part_name / "";
     auto entry = data.getContext()->getReplicatedFetchList().insert(
@@ -580,7 +557,6 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
         replica_path, uri, to_detached, sum_files_size);
 
     in.setNextCallback(ReplicatedFetchReadCallback(*entry));
-
 
     size_t projections = 0;
     if (server_protocol_version >= REPLICATION_PROTOCOL_VERSION_WITH_PARTS_PROJECTION)

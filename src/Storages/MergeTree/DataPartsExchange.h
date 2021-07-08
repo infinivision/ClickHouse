@@ -115,7 +115,7 @@ private:
             const UUID & part_uuid,
             const StorageMetadataPtr & metadata_snapshot,
             ContextPtr context,
-            ReservationPtr reservation,
+            DiskPtr disk,
             PooledReadWriteBufferFromHTTP & in,
             size_t projections,
             ThrottlerPtr throttler);

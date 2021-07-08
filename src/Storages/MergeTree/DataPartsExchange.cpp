@@ -403,7 +403,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     const String & tmp_prefix_,
     std::optional<CurrentlySubmergingEmergingTagger> * tagger_ptr,
     bool try_zero_copy,
-    DiskPtr dest_disk)
+    DiskPtr disk)
 {
     if (blocker.isCancelled())
         throw Exception("Fetching of part was cancelled", ErrorCodes::ABORTED);
@@ -427,7 +427,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     Strings capability;
     if (try_zero_copy && data_settings->allow_remote_fs_zero_copy_replication)
     {
-        if (!dest_disk)
+        if (!disk)
         {
             DiskType::Type zero_copy_disk_types[] = {DiskType::Type::S3, DiskType::Type::HDFS};
             for (auto disk_type: zero_copy_disk_types)
@@ -439,9 +439,9 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
                 }
             }
         }
-        else if (dest_disk->supportZeroCopyReplication())
+        else if (disk->supportZeroCopyReplication())
         {
-            capability.push_back(DiskType::toString(dest_disk->getType()));
+            capability.push_back(DiskType::toString(disk->getType()));
         }
     }
     if (!capability.empty())
@@ -487,7 +487,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
             ReadBufferFromString ttl_infos_buffer(ttl_infos_string);
             assertString("ttl format version: 1\n", ttl_infos_buffer);
             ttl_infos.read(ttl_infos_buffer);
-            if (!dest_disk)
+            if (!disk)
             {
                 reservation
                     = data.balancedReservation(metadata_snapshot, sum_files_size, 0, part_name, part_info, {}, tagger_ptr, &ttl_infos, true);
@@ -496,20 +496,20 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
                         = data.reserveSpacePreferringTTLRules(metadata_snapshot, sum_files_size, ttl_infos, std::time(nullptr), 0, true);
             }
         }
-        else if (!dest_disk)
+        else if (!disk)
         {
             reservation = data.balancedReservation(metadata_snapshot, sum_files_size, 0, part_name, part_info, {}, tagger_ptr, nullptr);
             if (!reservation)
                 reservation = data.reserveSpace(sum_files_size);
         }
     }
-    else if (!dest_disk)
+    else if (!disk)
     {
         /// We don't know real size of part because sender server version is too old
         reservation = data.makeEmptyReservationOnLargestDisk();
     }
-    if (!dest_disk)
-        dest_disk = reservation->getDisk();
+    if (!disk)
+        disk = reservation->getDisk();
 
     bool sync = (data_settings->min_compressed_bytes_to_fsync_after_fetch
                     && sum_files_size >= data_settings->min_compressed_bytes_to_fsync_after_fetch);
@@ -536,7 +536,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
 
         try
         {
-            return downloadPartToDiskRemoteMeta(part_name, replica_path, to_detached, tmp_prefix_, dest_disk, in, throttler);
+            return downloadPartToDiskRemoteMeta(part_name, replica_path, to_detached, tmp_prefix_, disk, in, throttler);
         }
         catch (const Exception & e)
         {
@@ -545,12 +545,12 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
             LOG_WARNING(log, e.message() + " Will retry fetching part without zero-copy.");
             /// Try again but without zero-copy
             return fetchPart(metadata_snapshot, context, part_name, replica_path, host, port, timeouts,
-                user, password, interserver_scheme, throttler, to_detached, tmp_prefix_, nullptr, false, dest_disk);
+                user, password, interserver_scheme, throttler, to_detached, tmp_prefix_, nullptr, false, disk);
         }
     }
 
     auto storage_id = data.getStorageID();
-    String new_part_path = part_type == "InMemory" ? "memory" : fs::path(data.getFullPathOnDisk(reservation->getDisk())) / part_name / "";
+    String new_part_path = part_type == "InMemory" ? "memory" : fs::path(data.getFullPathOnDisk(disk)) / part_name / "";
     auto entry = data.getContext()->getReplicatedFetchList().insert(
         storage_id.getDatabaseName(), storage_id.getTableName(),
         part_info.partition_id, part_name, new_part_path,
@@ -564,8 +564,8 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
 
     MergeTreeData::DataPart::Checksums checksums;
     return part_type == "InMemory"
-        ? downloadPartToMemory(part_name, part_uuid, metadata_snapshot, context, std::move(reservation), in, projections, throttler)
-        : downloadPartToDisk(part_name, replica_path, to_detached, tmp_prefix_, sync, reservation->getDisk(), in, projections, checksums, throttler);
+        ? downloadPartToMemory(part_name, part_uuid, metadata_snapshot, context, disk, in, projections, throttler)
+        : downloadPartToDisk(part_name, replica_path, to_detached, tmp_prefix_, sync, disk, in, projections, checksums, throttler);
 }
 
 MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToMemory(
@@ -573,12 +573,12 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToMemory(
     const UUID & part_uuid,
     const StorageMetadataPtr & metadata_snapshot,
     ContextPtr context,
-    ReservationPtr reservation,
+    DiskPtr disk,
     PooledReadWriteBufferFromHTTP & in,
     size_t projections,
     ThrottlerPtr throttler)
 {
-    auto volume = std::make_shared<SingleDiskVolume>("volume_" + part_name, reservation->getDisk(), 0);
+    auto volume = std::make_shared<SingleDiskVolume>("volume_" + part_name, disk, 0);
     MergeTreeData::MutableDataPartPtr new_data_part =
         std::make_shared<MergeTreeDataPartInMemory>(data, part_name, volume);
 

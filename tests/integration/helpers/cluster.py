@@ -703,7 +703,7 @@ class ClickHouseCluster:
                      with_redis=False, with_minio=False, with_cassandra=False, with_jdbc_bridge=False,
                      hostname=None, env_variables=None, image="yandex/clickhouse-integration-test", tag=None,
                      stay_alive=False, ipv4_address=None, ipv6_address=None, with_installed_binary=False, tmpfs=None,
-                     zookeeper_docker_compose_path=None, minio_certs_dir=None, use_keeper=True,
+                     zookeeper_docker_compose_path=None, minio_certs_dir=None, use_keeper=False,
                      main_config_name="config.xml", users_config_name="users.xml", copy_common_configs=True):
 
         """Add an instance to the cluster.
@@ -1197,7 +1197,7 @@ class ClickHouseCluster:
                 return
             except Exception as ex:
                 logging.exception("Can't connect to HDFS " + str(ex))
-                time.sleep(1)
+                time.sleep(5)
 
         raise Exception("Can't wait HDFS to start")
 

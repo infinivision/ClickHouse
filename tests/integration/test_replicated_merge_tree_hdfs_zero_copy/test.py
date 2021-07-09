@@ -80,9 +80,12 @@ def test_hdfs_zero_copy_replication_insert(cluster):
 
 
 @pytest.mark.parametrize(
-    ("storage_policy"), ["hybrid", "tiered", "tiered_copy"]
+    ("storage_policy", "init_objects"),
+    [("hybrid", 0),
+     ("tiered", 0),
+     ("tiered_copy", FILES_OVERHEAD_PER_TABLE)]
 )
-def test_hdfs_zero_copy_replication_single_move(cluster, storage_policy):
+def test_hdfs_zero_copy_replication_single_move(cluster, storage_policy, init_objects):
     node1 = cluster.instances["node1"]
 
     node1.query("DROP TABLE IF EXISTS single_node_move_test NO DELAY")
@@ -94,32 +97,29 @@ def test_hdfs_zero_copy_replication_single_move(cluster, storage_policy):
         SETTINGS storage_policy='$policy'
         """).substitute(policy=storage_policy)
     )
-    expected_objects = {"hybrid": 0, "tiered": 0, "tiered_copy": FILES_OVERHEAD_PER_TABLE}
-    wait_for_hdfs_objects(cluster, "/clickhouse1", expected_objects[storage_policy])
+    wait_for_hdfs_objects(cluster, "/clickhouse1", init_objects)
 
     node1.query("INSERT INTO single_node_move_test VALUES (now() - INTERVAL 3 DAY, 10), (now() - INTERVAL 1 DAY, 11)")
     assert node1.query("SELECT id FROM single_node_move_test ORDER BY dt FORMAT Values") == "(10),(11)"
-    expected_objects = {"hybrid": 0, "tiered": 0, "tiered_copy": FILES_OVERHEAD_PER_TABLE + FILES_OVERHEAD_PER_PART_COMPACT}
-    wait_for_hdfs_objects(cluster, "/clickhouse1", expected_objects[storage_policy])
 
     node1.query("ALTER TABLE single_node_move_test MOVE PARTITION ID 'all' TO VOLUME 'external'")
     assert node1.query("SELECT partition_id,disk_name FROM system.parts WHERE table='single_node_move_test' FORMAT Values") == "('all','hdfs1')"
     assert node1.query("SELECT id FROM single_node_move_test ORDER BY dt FORMAT Values") == "(10),(11)"
-    expected_objects = {"hybrid": FILES_OVERHEAD_PER_PART_COMPACT, "tiered": FILES_OVERHEAD_PER_PART_COMPACT, "tiered_copy": FILES_OVERHEAD_PER_TABLE + FILES_OVERHEAD_PER_PART_COMPACT}
-    wait_for_hdfs_objects(cluster, "/clickhouse1", expected_objects[storage_policy])
+    wait_for_hdfs_objects(cluster, "/clickhouse1", init_objects + FILES_OVERHEAD_PER_PART_COMPACT)
 
     node1.query("ALTER TABLE single_node_move_test MOVE PARTITION ID 'all' TO VOLUME 'main'")
     assert node1.query("SELECT id FROM single_node_move_test ORDER BY dt FORMAT Values") == "(10),(11)"
-    expected_objects = {"hybrid": 0, "tiered": 0, "tiered_copy": FILES_OVERHEAD_PER_TABLE + FILES_OVERHEAD_PER_PART_COMPACT}
-    wait_for_hdfs_objects(cluster, "/clickhouse1", expected_objects[storage_policy])
 
     node1.query("DROP TABLE IF EXISTS single_node_move_test NO DELAY")
 
 
 @pytest.mark.parametrize(
-    ("storage_policy"), ["hybrid", "tiered", "tiered_copy"]
+    ("storage_policy", "init_objects"),
+    [("hybrid", 0),
+     ("tiered", 0),
+     ("tiered_copy", SHARDS * FILES_OVERHEAD_PER_TABLE)]
 )
-def test_hdfs_zero_copy_replication_move(cluster, storage_policy):
+def test_hdfs_zero_copy_replication_move(cluster, storage_policy, init_objects):
     node1 = cluster.instances["node1"]
     node2 = cluster.instances["node2"]
 
@@ -133,9 +133,7 @@ def test_hdfs_zero_copy_replication_move(cluster, storage_policy):
         SETTINGS storage_policy='$policy'
         """).substitute(policy=storage_policy)
     )
-
-    expected_objects = {"hybrid": 0, "tiered": 0, "tiered_copy": SHARDS * FILES_OVERHEAD_PER_TABLE}
-    wait_for_hdfs_objects(cluster, "/clickhouse1", expected_objects[storage_policy])
+    wait_for_hdfs_objects(cluster, "/clickhouse1", init_objects)
 
     node1.query("INSERT INTO move_test VALUES (now() - INTERVAL 3 DAY, 10), (now() - INTERVAL 1 DAY, 11)")
     node2.query("SYSTEM SYNC REPLICA move_test")
@@ -144,16 +142,14 @@ def test_hdfs_zero_copy_replication_move(cluster, storage_policy):
     assert node2.query("SELECT id FROM move_test ORDER BY dt FORMAT Values") == "(10),(11)"
 
     node1.query("ALTER TABLE move_test MOVE PARTITION ID 'all' TO VOLUME 'external'")
-    expected_objects = {"hybrid": FILES_OVERHEAD_PER_PART_COMPACT, "tiered": FILES_OVERHEAD_PER_PART_COMPACT, "tiered_copy": SHARDS * FILES_OVERHEAD_PER_TABLE + FILES_OVERHEAD_PER_PART_COMPACT}
-    wait_for_hdfs_objects(cluster, "/clickhouse1", expected_objects[storage_policy])
+    wait_for_hdfs_objects(cluster, "/clickhouse1", init_objects + FILES_OVERHEAD_PER_PART_COMPACT)
 
     node2.query("ALTER TABLE move_test MOVE PARTITION ID 'all' TO VOLUME 'external'")
-
     assert node1.query("SELECT partition_id,disk_name FROM system.parts WHERE table='move_test' FORMAT Values") == "('all','hdfs1')"
     assert node2.query("SELECT partition_id,disk_name FROM system.parts WHERE table='move_test' FORMAT Values") == "('all','hdfs1')"
     assert node1.query("SELECT id FROM move_test ORDER BY dt FORMAT Values") == "(10),(11)"
     assert node2.query("SELECT id FROM move_test ORDER BY dt FORMAT Values") == "(10),(11)"
-    wait_for_hdfs_objects(cluster, "/clickhouse1", expected_objects[storage_policy])
+    wait_for_hdfs_objects(cluster, "/clickhouse1", init_objects + FILES_OVERHEAD_PER_PART_COMPACT)
 
     node1.query("DROP TABLE IF EXISTS move_test NO DELAY")
     node2.query("DROP TABLE IF EXISTS move_test NO DELAY")
